@@ -1,0 +1,16 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "github.copilot.enable": {
+    "*": true
+  },
+  "github.copilot.chat.agent.runTasks": true,
+  "github.copilot.chat.codesearch.enabled": true,
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "files.associations": {
+    "*.toml": "toml"
+  }
+}
