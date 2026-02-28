@@ -1,22 +1,25 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { GlassCard } from '../glass/GlassCard';
+import { Rocket, Settings } from 'lucide-react';
+import { GlassButton } from '../glass/GlassButton';
 
-const Header = () => {
+const Header: React.FC = () => {
   return (
-    <GlassCard variant="subtle" className="rounded-none">
-        <header className="flex items-center justify-between p-4">
-            <Link to="/" className="text-2xl font-bold text-accent-orange">
-                Fuzzy Short
-            </Link>
-            <nav className="flex items-center space-x-4">
-                <Link to="/" className="text-text-secondary hover:text-text-primary">Home</Link>
-                <Link to="/storyboard" className="text-text-secondary hover:text-text-primary">Storyboard</Link>
-                <Link to="/project" className="text-text-secondary hover:text-text-primary">Project</Link>
-                <Link to="/settings" className="text-text-secondary hover:text-text-primary">Settings</Link>
-            </nav>
-        </header>
-    </GlassCard>
+    <header className="sticky top-0 z-40 w-full border-b border-glass-border-01 bg-bg-surface/70 backdrop-blur-md">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <Link to="/" className="flex items-center space-x-2">
+          <Rocket className="text-accent-orange" />
+          <span className="text-lg font-bold text-text-primary">Fuzzy Short</span>
+        </Link>
+        <div className="flex items-center space-x-4">
+          <Link to="/settings">
+            <GlassButton>
+              <Settings size={16} />
+            </GlassButton>
+          </Link>
+        </div>
+      </div>
+    </header>
   );
 };
 

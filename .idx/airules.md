@@ -748,10 +748,10 @@ npx tsc --noEmit
 ## 📋 PHASE TRACKER
 
 ```
-Phase 0 — Foundation         [CURRENT]
+Phase 0 — Foundation         [COMPLETED]
   ✓ Project setup + types + routing + glass design system
 
-Phase 1 — AI Brain           [NEXT]
+Phase 1 — AI Brain           [CURRENT]
   ✓ StoryInputForm + Brain Worker + 3 model support + Storyboard display
 
 Phase 2 — Image Generation   [PENDING]
@@ -768,23 +768,3 @@ Phase 5 — Polish & Deploy    [PENDING]
 ```
 
 **Update this tracker as phases complete.**
-
----
-
-## 🚫 CRITICAL AGENT BEHAVIOR RULES
-
-### NEVER create subfolders with project name
-❌ NEVER run: npm create vite@latest fuzzy-vid
-❌ NEVER run: mkdir fuzzy-vid
-❌ NEVER create any subfolder at root level
-
-### Working directory is ALWAYS the repo root
-✅ You are ALREADY inside ~/Fuzzy-vid (the repo root)
-✅ Run ALL commands directly here: npm install, git add, etc
-✅ Create files directly: src/..., worker/..., etc
-✅ If asked to init a new project, use: npm create vite@latest . -- --template react-ts
-   (note the DOT — installs in current directory)
-
-### Before ANY file creation, always run: pwd
-Expected output: /home/user/Fuzzy-vid
-If different, cd to correct directory first.

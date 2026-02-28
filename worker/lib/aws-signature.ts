@@ -1,19 +1,148 @@
-import { AwsClient } from '@aws-sdk/protocol-http';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { HttpRequest } from '@aws-sdk/protocol-http';
 
-// This is a basic implementation. In a real-world scenario, you would want to handle errors and edge cases more gracefully.
+// A stripped-down and simplified version of AWS V4 signer for Cloudflare Workers.
+// Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
-const signer = new SignatureV4({
-    credentials: defaultProvider(),
-    region: 'us-east-1', // this will be overridden by the request
-    service: 'bedrock',
-    sha256: Sha256,
-});
+export class AwsV4Signer {
+    constructor(
+        private readonly credentials: {
+            awsAccessKeyId: string;
+            awsSecretKey: string;
+            awsSessionToken?: string;
+        },
+        private readonly region: string,
+        private readonly service: string
+    ) {}
 
-export async function signRequest(request: HttpRequest, region: string) {
-    const signedRequest = await signer.sign(request, { region });
-    return signedRequest;
+    async sign(request: Request): Promise<Request> {
+        const url = new URL(request.url);
+        const headers = new Headers(request.headers);
+
+        const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+        const date = timestamp.substring(0, 8);
+
+        headers.set('host', url.hostname);
+        headers.set('x-amz-date', timestamp);
+        if (this.credentials.awsSessionToken) {
+            headers.set('x-amz-security-token', this.credentials.awsSessionToken);
+        }
+
+        const signedHeaders = this.getSignedHeaders(headers);
+        const canonicalRequest = await this.createCanonicalRequest(
+            request,
+            headers,
+            signedHeaders
+        );
+        const scope = `${date}/${this.region}/${this.service}/aws4_request`;
+        const stringToSign = await this.createStringToSign(
+            timestamp,
+            scope,
+            canonicalRequest
+        );
+        const signingKey = await this.getSigningKey(date);
+        const signature = await this.getSignature(signingKey, stringToSign);
+
+        const authorization = `AWS4-HMAC-SHA256 Credential=${this.credentials.awsAccessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+        headers.set('Authorization', authorization);
+
+        const signedRequest = new Request(request.url, {
+            method: request.method,
+            headers,
+            body: request.body,
+        });
+
+        return signedRequest;
+    }
+
+    private getSignedHeaders(headers: Headers): string {
+        const headerNames = Array.from(headers.keys()).map((h) => h.toLowerCase());
+        headerNames.sort();
+        return headerNames.join(';');
+    }
+
+    private async createCanonicalRequest(
+        request: Request,
+        headers: Headers,
+        signedHeaders: string
+    ): Promise<string> {
+        const url = new URL(request.url);
+        const body = request.method === 'GET' || request.method === 'HEAD' ? '' : (await request.clone().text()) || '';
+        const bodyHash = this.hex(await this.sha256(body));
+        
+        const canonicalHeaders: string[] = [];
+        const headerNames = Array.from(headers.keys());
+        headerNames.sort();
+        for (const name of headerNames) {
+            canonicalHeaders.push(`${name.toLowerCase()}:${headers.get(name)}`);
+        }
+        
+        const searchParams = new URLSearchParams(url.search);
+        searchParams.sort();
+        
+        const canonicalQuery = searchParams.toString();
+
+        return [
+            request.method.toUpperCase(),
+            this.uriEncode(url.pathname),
+            canonicalQuery,
+            canonicalHeaders.join('\n') + '\n',
+            signedHeaders,
+            bodyHash,
+        ].join('\n');
+    }
+
+    private async createStringToSign(
+        timestamp: string,
+        scope: string,
+        canonicalRequest: string
+    ): Promise<string> {
+        return [
+            'AWS4-HMAC-SHA256',
+            timestamp,
+            scope,
+            this.hex(await this.sha256(canonicalRequest)),
+        ].join('\n');
+    }
+    
+    private async getSignature(key: CryptoKey, stringToSign: string): Promise<string> {
+        const signature = await crypto.subtle.sign(
+            { name: 'HMAC', hash: 'SHA-256' },
+            key,
+            new TextEncoder().encode(stringToSign)
+        );
+        return this.hex(signature);
+    }
+    
+    private async hmac(key: ArrayBuffer, data: string): Promise<ArrayBuffer> {
+        const cryptoKey = await crypto.subtle.importKey(
+            'raw',
+            key,
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+        return await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
+    }
+    
+    private async getSigningKey(date: string): Promise<CryptoKey> {
+        const key = new TextEncoder().encode('AWS4' + this.credentials.awsSecretKey);
+        const dateKey = await this.hmac(key, date);
+        const dateRegionKey = await this.hmac(dateKey, this.region);
+        const dateRegionServiceKey = await this.hmac(dateRegionKey, this.service);
+        const signingKeyData = await this.hmac(dateRegionServiceKey, 'aws4_request');
+        return crypto.subtle.importKey('raw', signingKeyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    }
+
+    private async sha256(data: string): Promise<ArrayBuffer> {
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+    }
+    
+    private hex(buffer: ArrayBuffer): string {
+        return Array.from(new Uint8Array(buffer))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+
+    private uriEncode(str: string): string {
+        return encodeURIComponent(str).replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    }
 }

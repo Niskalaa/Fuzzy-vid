@@ -1,9 +1,9 @@
 import React from 'react';
 
-const Settings = () => {
+const Settings: React.FC = () => {
   return (
     <div>
-      <h1>Settings</h1>
+      <h1 className="text-2xl font-bold">Settings</h1>
     </div>
   );
 };
