@@ -1,35 +1,67 @@
-import { Hono } from 'hono';
+
 import { Env } from './index';
 import { AwsV4Signer } from './lib/aws-signature';
+import { corsHeaders } from './lib/cors';
 
-const storage = new Hono<{ Bindings: Env }>();
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
 
-storage.get('/presign', async (c) => {
-  const { key } = c.req.query();
+    const { method, url } = request;
+    const { pathname, searchParams } = new URL(url);
 
-  if (!key) {
-    return c.json({ error: 'Bad Request', message: 'Missing key' }, 400);
-  }
+    // Endpoint: GET /api/storage/presign?key=...
+    if (method === 'GET' && pathname.endsWith('/presign')) {
+      try {
+        const key = searchParams.get('key');
 
-  const r2Endpoint = `https://${c.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-  const url = new URL(`${r2Endpoint}/${key}`);
+        if (!key) {
+          const errorResponse = { error: 'Bad Request', message: 'Missing "key" query parameter' };
+          return new Response(JSON.stringify(errorResponse), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        const r2Endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+        const urlToSign = new URL(`${r2Endpoint}/${key}`);
 
-  const signer = new AwsV4Signer({
-      awsAccessKeyId: c.env.R2_ACCESS_KEY_ID,
-      awsSecretKey: c.env.R2_SECRET_ACCESS_KEY,
-  }, 'auto', 's3');
+        // The original Hono code passed credentials and config separately.
+        // Assuming the signer is instantiated like this based on the lib's likely design.
+        const signer = new AwsV4Signer({
+            awsAccessKeyId: env.R2_ACCESS_KEY_ID,
+            awsSecretKey: env.R2_SECRET_ACCESS_KEY,
+        }, 'auto', 's3');
 
-  const request = new Request(url, {
-      method: 'GET',
-  });
+        const requestToSign = new Request(urlToSign, {
+            method: 'GET',
+        });
 
-  // This is a bit of a hack. The signer is meant for Fetch requests,
-  // but we only need the URL with the signature in the query string.
-  // So we sign a fake request and then extract the query params.
-  const signedRequest = await signer.sign(request);
-  const signedUrl = signedRequest.url;
+        // Sign a fake request to generate the presigned URL with authentication query parameters
+        const signedRequest = await signer.sign(requestToSign);
+        const signedUrl = signedRequest.url;
+        
+        const response = { signedUrl };
+        return new Response(JSON.stringify(response), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
 
-  return c.json({ signedUrl });
-});
+      } catch (error: any) {
+        console.error('Error generating presigned URL:', error);
+        const errorResponse = { error: 'Internal Server Error', message: error.message };
+        return new Response(JSON.stringify(errorResponse), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
-export default storage;
+    const notFoundResponse = { error: 'Not Found', message: `Method ${method} on ${pathname} not found` };
+    return new Response(JSON.stringify(notFoundResponse), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  },
+};

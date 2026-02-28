@@ -1,8 +1,10 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
+
+import { corsHeaders } from './lib/cors';
 import brain from './brain';
 import image from './image';
 import video from './video';
+import audio from './audio';
+import project from './project';
 import storage from './storage';
 
 export interface Env {
@@ -19,21 +21,48 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
-const app = new Hono<{ Bindings: Env }>();
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
 
-// CORS middleware
-app.use('/api/*', cors());
+    const url = new URL(request.url);
+    const pathname = url.pathname;
 
-// Brain routes
-app.route('/api/brain', brain);
+    // Simple path-based routing
+    try {
+      if (pathname.startsWith('/api/brain')) {
+        return brain.fetch(request, env, ctx);
+      }
+      if (pathname.startsWith('/api/image')) {
+        return image.fetch(request, env, ctx);
+      }
+       if (pathname.startsWith('/api/video')) {
+        return video.fetch(request, env, ctx);
+      }
+       if (pathname.startsWith('/api/audio')) {
+        return audio.fetch(request, env, ctx);
+      }
+       if (pathname.startsWith('/api/project')) {
+        return project.fetch(request, env, ctx);
+      }
+      if (pathname.startsWith('/api/storage')) {
+        return storage.fetch(request, env, ctx);
+      }
+      
+      // Default 404
+      return new Response(JSON.stringify({ error: 'Not Found', message: `Route ${pathname} not found` }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
 
-// Image routes
-app.route('/api/image', image);
-
-// Video routes
-app.route('/api/video', video);
-
-// Storage routes
-app.route('/api/storage', storage);
-
-export default app;
+    } catch (e: any) {
+        console.error('Main Worker Error:', e, e.stack);
+        return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+  },
+};
