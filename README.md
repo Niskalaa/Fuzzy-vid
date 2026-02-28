@@ -1,124 +1,73 @@
-# 🎬 Fuzzy Short — AI Story Studio
+# React + TypeScript + Vite
 
-> AI-powered short video production for YouTube Shorts, Instagram Reels & TikTok
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
----
+Currently, two official plugins are available:
 
-## ✨ Overview
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-Input a story prompt → AI generates a complete storyboard schema → Generate images, videos, and voiceovers scene by scene → Download individual files for CapCut editing.
+## React Compiler
 
----
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## 🎨 Design System
+## Expanding the ESLint configuration
 
-**iOS 26 Liquid Glass** on pure black background:
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| Orange Fire | `#F05A25` | Primary CTA, accent |
-| Sky Blue | `#3FA9F6` | Secondary, status done |
-| Cream Sand | `#EFE1CF` | Text, borders |
-| Pure Black | `#000000` | Base background |
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
----
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-## 🧠 AI Models
-
-### Brain (Story Schema Generation)
-- Gemini 1.5 Flash (Google AI)
-- Llama 4 Maverick (AWS Bedrock)
-- Claude Sonnet 4.6 (AWS Bedrock)
-
-### Image Generation
-- Gemini Imagen 3 (Google AI)
-- Nova Canvas v1 (AWS Bedrock — us-west-2)
-- Titan Image V2 (AWS Bedrock — us-west-2)
-
-### Video Generation
-- Nova Reel v1 (AWS Bedrock — us-east-1 **fixed**)
-- Runway Gen-4 (Runway API)
-- Runway Gen-4 Turbo (Runway API)
-
-### Audio TTS
-- AWS Polly Neural (multi-region)
-- Gemini TTS (Google AI)
-- ElevenLabs (user API key)
-
----
-
-## 🛠️ Setup
-
-### Prerequisites
-- Node.js 20+
-- Wrangler CLI (`npm install -g wrangler`)
-- Cloudflare account
-- AWS account with Bedrock access
-
-### 1. Clone & Install
-```bash
-git clone https://github.com/adryndian/Fuzzy-vid.git
-cd Fuzzy-vid
-npm install
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-### 2. Wrangler Login
-```bash
-export CLOUDFLARE_API_TOKEN=your_token
-wrangler whoami
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
-
-### 3. Set Secrets
-```bash
-wrangler secret put GEMINI_API_KEY
-wrangler secret put AWS_ACCESS_KEY_ID
-wrangler secret put AWS_SECRET_ACCESS_KEY
-wrangler secret put R2_ACCOUNT_ID
-wrangler secret put R2_ACCESS_KEY_ID
-wrangler secret put R2_SECRET_ACCESS_KEY
-wrangler secret put RUNWAY_API_KEY
-wrangler secret put ELEVENLABS_API_KEY
-```
-
-### 4. Dev Server
-```bash
-npm run dev
-```
-
-### 5. Deploy
-```bash
-wrangler deploy
-```
-
----
-
-## 📋 Constraints
-
-- Max **15 scenes** per project
-- Output: **9:16 portrait** only (Shorts/Reels/TikTok)
-- **No video stitching** — individual scene files
-- **No bulk ZIP** — download per file
-- **No BGM** — user adds in CapCut
-- **Image prompts: English only** (all models)
-- Nova Reel output: **directly to R2** (zero egress)
-
----
-
-## 🔧 R2 + KV Info
-
-```
-Bucket:  igome-story-storage
-KV ID:   fc732a268ca9435b8de8e50f34a35365
-Worker:  fuzzy-vid-worker
-```
-
----
-
-## 📦 Phase Status
-
-- [ ] Phase 0 — Foundation (types, routing, glass UI)
-- [ ] Phase 1 — AI Brain (3 models + storyboard)
-- [ ] Phase 2 — Image Generation
-- [ ] Phase 3 — Video Generation
-- [ ] Phase 4 — Audio TTS
-- [ ] Phase 5 — Polish & Deploy

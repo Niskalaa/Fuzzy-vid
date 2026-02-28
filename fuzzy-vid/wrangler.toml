@@ -1,0 +1,16 @@
+name = "fuzzy-vid-worker"
+main = "worker/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "STORY_STORAGE"
+bucket_name = "igome-story-storage"
+
+[[kv_namespaces]]
+binding = "JOB_STATUS"
+id = "fc732a268ca9435b8de8e50f34a35365"
+preview_id = "fc732a268ca9435b8de8e50f34a35365"
+
+[vars]
+ENVIRONMENT = "production"
