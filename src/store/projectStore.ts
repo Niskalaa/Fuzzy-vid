@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { ProjectSchema, Scene } from '../types/schema';
+import type { ProjectSchema, Scene } from '../types/schema';
 
 interface ProjectState {
   project: ProjectSchema | null;

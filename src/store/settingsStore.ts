@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AppSettings, BrainModel, ImageModel, VideoModel, AudioModel, AWSRegion } from '../types/schema';
+import type { AppSettings, BrainModel, ImageModel, VideoModel, AudioModel, AWSRegion } from '../types/schema';
 
 type SettingsState = AppSettings;
 
@@ -75,7 +75,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
       setDefaultNarasiLanguage: (lang) => set({ default_narasi_language: lang }),
     }),
     {
-      name: 'fuzzy-short-settings', // name of the item in the storage (must be unique)
+      name: 'fuzzy-short-settings',
     }
   )
 );

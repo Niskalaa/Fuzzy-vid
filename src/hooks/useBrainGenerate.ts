@@ -1,11 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import api from '../lib/api';
+import { api } from '../lib/api';
 import useProjectStore from '../store/projectStore';
-import { ProjectSchema } from '../types/schema';
+import type { ProjectSchema, BrainModel } from '../types/schema';
 
 interface GenerateBrainProps {
   prompt: string;
-  model: string;
+  model: BrainModel;
   narasi_language: 'id' | 'en';
 }
 
