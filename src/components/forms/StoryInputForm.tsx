@@ -1,19 +1,15 @@
-'''
 import React, { useState } from 'react';
 import { GlassCard } from '../glass/GlassCard';
-import { GlassInput } from '../glass/GlassInput';
 import { GlassButton } from '../glass/GlassButton';
-import { GlassBadge } from '../glass/GlassBadge';
 import useSettingsStore from '../../store/settingsStore';
-import { BrainModel, ArtStyle, Mood } from '../../types/schema';
-import { motion } from 'framer-motion';
-import { Bot, ChevronDown, Loader } from 'lucide-react';
+import type { BrainModel } from '../../types/schema';
+import { Bot, Loader } from 'lucide-react';
 import { useBrainGenerate } from '../../hooks/useBrainGenerate';
 import { useNavigate } from 'react-router-dom';
 
 const StoryInputForm: React.FC = () => {
   const [storyPrompt, setStoryPrompt] = useState('');
-  const { default_brain_model, default_narasi_language, set: setSettings } = useSettingsStore();
+  const { default_brain_model, default_narasi_language, setDefaultBrainModel } = useSettingsStore();
   const brainGenerateMutation = useBrainGenerate();
   const navigate = useNavigate();
 
@@ -46,7 +42,7 @@ const StoryInputForm: React.FC = () => {
             <label className="text-xs text-text-secondary mb-1 block">AI Brain</label>
             <select 
               value={default_brain_model} 
-              onChange={(e) => setSettings({ default_brain_model: e.target.value as BrainModel })}
+              onChange={(e) => setDefaultBrainModel(e.target.value as BrainModel)}
               className="relative block w-full rounded-lg border border-glass-border-02 bg-glass-01 px-3 py-2 text-text-primary shadow-inner focus:border-glass-border-03 focus:outline-none focus:ring-1 focus:ring-accent-blue"
             >
               <option value="gemini">Gemini 1.5 Flash</option>
@@ -75,4 +71,3 @@ const StoryInputForm: React.FC = () => {
 };
 
 export default StoryInputForm;
-''

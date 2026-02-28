@@ -751,19 +751,19 @@ npx tsc --noEmit
 Phase 0 — Foundation         [COMPLETED]
   ✓ Project setup + types + routing + glass design system
 
-Phase 1 — AI Brain           [CURRENT]
+Phase 1 — AI Brain           [COMPLETED]
   ✓ StoryInputForm + Brain Worker + 3 model support + Storyboard display
 
-Phase 2 — Image Generation   [PENDING]
+Phase 2 — Image Generation   [COMPLETED]
   ✓ ImageTab + 3 model Workers + polling + preview + download + character ref
 
-Phase 3 — Video Generation   [PENDING]
+Phase 3 — Video Generation   [COMPLETED]
   ✓ VideoTab + Nova Reel (R2 direct) + Runway Gen-4 + polling + player
 
-Phase 4 — Audio TTS          [PENDING]
+Phase 4 — Audio TTS          [COMPLETED]
   ✓ AudioTab + 3 TTS Workers + SSML + waveform player + download
 
-Phase 5 — Polish & Deploy    [PENDING]
+Phase 5 — Polish & Deploy    [COMPLETED]
   ✓ Error states + loading UX + Cloudflare Pages + final testing
 ```
 

@@ -5,11 +5,13 @@ type GlassCardProps = {
   children: React.ReactNode;
   className?: string;
   variant?: 'default' | 'strong' | 'subtle';
+  onClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
 };
 
-export const GlassCard: React.FC<GlassCardProps> = ({ children, className, variant = 'default' }) => {
+export const GlassCard: React.FC<GlassCardProps> = ({ children, className, variant = 'default', onClick }) => {
   return (
     <div
+      onClick={onClick}
       className={cn(
         'relative rounded-2xl border',
         'backdrop-blur-xl',

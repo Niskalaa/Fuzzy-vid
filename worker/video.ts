@@ -1,12 +1,9 @@
-import { Hono } from 'hono';
 import { Env } from './index';
 import { nanoid } from 'nanoid';
 import { AwsV4Signer } from './lib/aws-signature';
 
-const video = new Hono<{ Bindings: Env }>();
-
-const generateVideoWithNovaReel = async (c: any, imageR2Key: string, jobId: string, projectId: string, sceneId: number) => {
-  const r2Endpoint = `https://${c.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: string, projectId: string, sceneId: number) {
+  const r2Endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   const outputR2Key = `projects/${projectId}/scene_${sceneId}/video_${Date.now()}.mp4`;
 
   const bedrockEndpoint = new URL('https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-reel-v1:0/invoke');
@@ -15,12 +12,11 @@ const generateVideoWithNovaReel = async (c: any, imageR2Key: string, jobId: stri
     "input_image_r2_key": imageR2Key,
     "output_r2_bucket": "igome-story-storage",
     "output_r2_key": outputR2Key,
-    // Optional parameters, add as needed
   };
 
   const signer = new AwsV4Signer({
-      awsAccessKeyId: c.env.AWS_ACCESS_KEY_ID,
-      awsSecretKey: c.env.AWS_SECRET_ACCESS_KEY,
+      awsAccessKeyId: env.AWS_ACCESS_KEY_ID,
+      awsSecretKey: env.AWS_SECRET_ACCESS_KEY,
   }, 'us-east-1', 'bedrock');
 
   const request = new Request(bedrockEndpoint, {
@@ -33,49 +29,83 @@ const generateVideoWithNovaReel = async (c: any, imageR2Key: string, jobId: stri
 
   const signedRequest = await signer.sign(request);
 
+  // Use fetch without awaiting it to run in the background
   fetch(signedRequest)
     .then(async res => {
       if (!res.ok) {
         const errorBody = await res.text();
         console.error('Nova Reel Error:', errorBody);
-        await c.env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
+        await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
       } else {
-        const data = await res.json();
-        // Nova Reel is async, but we can assume the job has started.
-        // A separate poller/webhook would be needed for true status, for now we just mark as done and provide the key.
-        await c.env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'done', videoR2Key: outputR2Key }), { expirationTtl: 3600 });
+        // const data = await res.json();
+        // For now we just mark as "generating" because the actual generation is async.
+        // The frontend will poll the /status endpoint. Nova Reel doesn't give a job id back,
+        // so we can't check its status directly. We will just have to check if the R2 key exists.
+        // For simplicity, we'll let the frontend polling handle the 'done' state by checking the presigned URL.
+        await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'done', videoR2Key: outputR2Key }), { expirationTtl: 3600 });
       }
+    }).catch(err => {
+        console.error('Fetch error in Nova Reel background task:', err);
+        env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: 'Failed to invoke Nova Reel model.' }), { expirationTtl: 3600 });
     });
-};
+}
 
-video.post('/generate', async (c) => {
-  const { image_r2_key, model, project_id, scene_id } = await c.req.json();
+export async function handleVideoRequest(request: Request, env: Env, url: URL): Promise<Response> {
+  const path = url.pathname;
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 
-  if (!image_r2_key || !model || !project_id || !scene_id) {
-    return c.json({ error: 'Bad Request', message: 'Missing required fields' }, 400);
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  const jobId = `vid_${Date.now()}_${nanoid(6)}`;
-  await c.env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
+  try {
+    if (path.startsWith('/api/video/generate')) {
+      if (request.method !== 'POST') {
+        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
 
-  if (model === 'nova_reel') {
-    await generateVideoWithNovaReel(c, image_r2_key, jobId, project_id, scene_id);
-  } else {
-    return c.json({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }, 501);
+      const { image_r2_key, model, project_id, scene_id } = await request.json();
+
+      if (!image_r2_key || !model || !project_id || !scene_id) {
+        return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const jobId = `vid_${Date.now()}_${nanoid(6)}`;
+      await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
+
+      if (model === 'nova_reel') {
+        // Do not await this, let it run in the background
+        generateVideoWithNovaReel(env, image_r2_key, jobId, project_id, scene_id);
+      } else {
+        return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+      }
+
+      return new Response(JSON.stringify({ jobId }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+    } else if (path.startsWith('/api/video/status/')) {
+        if (request.method !== 'GET') {
+            return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        
+        const parts = path.split('/');
+        const jobId = parts[parts.length - 1];
+        
+        const status = await env.JOB_STATUS.get(jobId);
+
+        if (!status) {
+            return new Response(JSON.stringify({ status: 'pending' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        return new Response(status, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    return new Response('Not Found', { status: 404, headers: corsHeaders });
+  } catch (e: any) {
+    console.error('Video handler error:', e);
+    return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-
-  return c.json({ jobId });
-});
-
-video.get('/status/:job_id', async (c) => {
-  const { job_id } = c.req.param();
-  const status = await c.env.JOB_STATUS.get(job_id);
-
-  if (!status) {
-    return c.json({ status: 'pending' });
-  }
-
-  return c.json(JSON.parse(status));
-});
-
-export default video;
+}

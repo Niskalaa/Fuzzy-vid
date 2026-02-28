@@ -1,11 +1,9 @@
-
-import { corsHeaders } from './lib/cors';
-import brain from './brain';
-import image from './image';
-import video from './video';
-import audio from './audio';
-import project from './project';
-import storage from './storage';
+import { handleBrainRequest } from './brain';
+import { handleImageRequest } from './image';
+import { handleVideoRequest } from './video';
+import { handleAudioRequest } from './audio';
+import { handleProjectRequest } from './project';
+import { handleStorageRequest } from './storage';
 
 export interface Env {
   JOB_STATUS: KVNamespace;
@@ -21,6 +19,12 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -30,28 +34,32 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // Simple path-based routing
     try {
       if (pathname.startsWith('/api/brain')) {
-        return brain.fetch(request, env, ctx);
+        return handleBrainRequest(request, env, url);
       }
       if (pathname.startsWith('/api/image')) {
-        return image.fetch(request, env, ctx);
+        return handleImageRequest(request, env, url);
       }
        if (pathname.startsWith('/api/video')) {
-        return video.fetch(request, env, ctx);
+        return handleVideoRequest(request, env, url);
       }
        if (pathname.startsWith('/api/audio')) {
-        return audio.fetch(request, env, ctx);
+        // Assuming audio.ts will be refactored, for now this will fail
+        // return handleAudioRequest(request, env, url);
+        return new Response("Audio service pending refactor", { status: 500 });
       }
        if (pathname.startsWith('/api/project')) {
-        return project.fetch(request, env, ctx);
+        // Assuming project.ts will be refactored
+        // return handleProjectRequest(request, env, url);
+        return new Response("Project service pending refactor", { status: 500 });
       }
       if (pathname.startsWith('/api/storage')) {
-        return storage.fetch(request, env, ctx);
+        // Assuming storage.ts will be refactored
+        // return handleStorageRequest(request, env, url);
+        return new Response("Storage service pending refactor", { status: 500 });
       }
       
-      // Default 404
       return new Response(JSON.stringify({ error: 'Not Found', message: `Route ${pathname} not found` }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

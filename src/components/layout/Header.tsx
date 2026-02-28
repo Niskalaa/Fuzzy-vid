@@ -1,9 +1,8 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Rocket, Settings } from 'lucide-react';
 import { GlassButton } from '../glass/GlassButton';
 
-const Header: React.FC = () => {
+const Header = () => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-glass-border-01 bg-bg-surface/70 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">

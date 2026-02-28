@@ -1,7 +1,4 @@
-import { Hono } from 'hono';
 import { Env } from './index';
-
-const brain = new Hono<{ Bindings: Env }>();
 
 const getSystemPrompt = (language: 'id' | 'en') => `
 You are an expert Creative Director and Visual Storyteller
@@ -24,61 +21,75 @@ OUTPUT RULES:
   even if narasi_language is set to one language
 `;
 
-brain.post('/generate', async (c) => {
-  try {
-    const { prompt, model, narasi_language = 'en' } = await c.req.json();
+export async function handleBrainRequest(request: Request, env: Env, url: URL): Promise<Response> {
+    const path = url.pathname;
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    };
 
-    if (!prompt || !model) {
-      return c.json({ error: 'Bad Request', message: 'Missing prompt or model' }, 400);
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { headers: corsHeaders });
     }
 
-    if (model === 'gemini') {
-        const systemPrompt = getSystemPrompt(narasi_language);
-        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${c.env.GEMINI_API_KEY}`;
-
-        const geminiPayload = {
-            contents: [
-                { parts: [{ text: systemPrompt }] },
-                { parts: [{ text: prompt }] }
-            ],
-            generationConfig: {
-                response_mime_type: "application/json",
+    try {
+        if (path.startsWith('/api/brain/generate')) {
+            if (request.method !== 'POST') {
+                return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
-        };
 
-        const geminiRes = await fetch(geminiEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(geminiPayload)
-        });
+            const { prompt, model, narasi_language = 'en' } = await request.json();
 
-        if (!geminiRes.ok) {
-            const errorBody = await geminiRes.text();
-            console.error("Gemini API Error:", errorBody);
-            return c.json({ error: 'Gemini API Error', message: errorBody }, geminiRes.status);
+            if (!prompt || !model) {
+                return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing prompt or model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            if (model === 'gemini') {
+                const systemPrompt = getSystemPrompt(narasi_language);
+                const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
+
+                const geminiPayload = {
+                    contents: [
+                        { parts: [{ text: systemPrompt }] },
+                        { parts: [{ text: prompt }] }
+                    ],
+                    generationConfig: {
+                        response_mime_type: "application/json",
+                    }
+                };
+
+                const geminiRes = await fetch(geminiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(geminiPayload)
+                });
+
+                if (!geminiRes.ok) {
+                    const errorBody = await geminiRes.text();
+                    console.error("Gemini API Error:", errorBody);
+                    return new Response(JSON.stringify({ error: 'Gemini API Error', message: errorBody }), { status: geminiRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                const geminiData = await geminiRes.json();
+                const projectSchemaText = geminiData.candidates[0].content.parts[0].text;
+                
+                // The response is pure JSON, so we can return it directly.
+                return new Response(projectSchemaText, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        } else if (path.startsWith('/api/brain/health')) {
+            return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        const geminiData = await geminiRes.json();
-        const projectSchemaText = geminiData.candidates[0].content.parts[0].text;
-        const projectSchema = JSON.parse(projectSchemaText);
+        return new Response('Not Found', { status: 404, headers: corsHeaders });
 
-        return c.json(projectSchema);
+    } catch (error: any) {
+        console.error('Error in brain handler:', error);
+        return new Response(JSON.stringify({ error: 'Internal Server Error', message: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-
-    // TODO: Implement other models
-
-    return c.json({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }, 501);
-
-  } catch (error: any) {
-    console.error('Error generating story:', error);
-    return c.json({ error: 'Internal Server Error', message: error.message }, 500);
-  }
-});
-
-brain.get('/health', (c) => {
-  return c.json({ ok: true });
-});
-
-export default brain;
+}

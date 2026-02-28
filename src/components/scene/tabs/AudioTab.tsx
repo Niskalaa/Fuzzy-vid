@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useProjectStore } from '../../../store/projectStore';
-import { useSettingsStore } from '../../../store/settingsStore';
+import useProjectStore from '../../../store/projectStore';
+import useSettingsStore from '../../../store/settingsStore';
 import { useAudioGenerate } from '../../../hooks/useAudioGenerate';
 import { GlassCard } from '../../glass/GlassCard';
-import { GlassButton } from '../../glass/GlassButton';
-import { SegmentedControl } from '../../ui/SegmentedControl'; // Assuming this exists
-import { Languages, Download, Copy, CheckCircle, Waves, Loader, AlertTriangle, User, Bot, SlidersHorizontal } from 'lucide-react';
-import { api } from '../../../lib/api';
-import { AudioModel, VoiceGender } from '../../../types/schema';
+import { Button } from '../../ui/Button';
+import { SegmentedControl } from '../../ui/SegmentedControl';
+import { Languages, Download, Copy, CheckCircle, Waves, Loader, AlertTriangle } from 'lucide-react';
+import api from '../../../lib/api';
+import type { AudioModel, VoiceGender, Scene } from '../../../types/schema';
 
 const voiceMap = {
   polly: {
@@ -35,12 +35,12 @@ const voiceMap = {
     ]
   },
   elevenlabs: {
-    'en': [], // User provides their own
-    'id': []  // User provides their own
+    'en': [],
+    'id': []
   }
 };
 
-const WaveformPlayer: React.FC<{ src: string }> = ({ src }) => (
+const WaveformPlayer = ({ src }: { src: string }) => (
     <div className="w-full h-24 bg-black/30 rounded-lg flex items-center justify-center relative group">
         <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
             <div className="h-12 w-full bg-gradient-to-r from-accent-blue/30 via-accent-orange/40 to-accent-blue/30 opacity-70 group-hover:opacity-100 transition-opacity"
@@ -50,13 +50,11 @@ const WaveformPlayer: React.FC<{ src: string }> = ({ src }) => (
     </div>
 );
 
-const AudioTab: React.FC = () => {
+const AudioTab = ({ scene }: { scene: Scene }) => {
   const queryClient = useQueryClient();
-  const { project, updateScene, activeSceneId } = useProjectStore();
+  const { project, updateScene } = useProjectStore();
   const settings = useSettingsStore();
   
-  const scene = project?.scenes.find(s => s.scene_id === activeSceneId);
-
   const [narasiLang, setNarasiLang] = useState<'id' | 'en'>(project?.metadata.narasi_language || 'en');
   const [narasiText, setNarasiText] = useState('');
   const [speed, setSpeed] = useState(1.0);
@@ -87,23 +85,22 @@ const AudioTab: React.FC = () => {
     }
   }, [availableVoices]);
 
-  const { data: jobStatus, error: jobError } = useQuery({
+  const { data: jobStatus, error: jobError } = useQuery<any>({ //TODO: Add type
     queryKey: ['audio-status', jobId],
     queryFn: () => api.get(`/api/audio/status/${jobId}`),
-    enabled: !!jobId && jobStatus?.status !== 'done' && jobStatus?.status !== 'failed',
-    refetchInterval: 2500,
+    enabled: !!jobId && (scene.status.audio === 'generating' || scene.status.audio === 'pending'),
+    refetchInterval: (query) => (query.state.data?.status === 'done' || query.state.data?.status === 'failed') ? false : 2500,
   });
 
   useEffect(() => {
     if (jobStatus?.status === 'done' && scene) {
-      queryClient.invalidateQueries({ queryKey: ['project', project?.project_id] });
       const audioUrl = `/api/storage/presign?key=${jobStatus.r2Key}`;
       updateScene(scene.scene_id, { 
-        ...scene,
         assets: { ...scene.assets, audio_url: audioUrl, audio_r2_key: jobStatus.r2Key },
         status: { ...scene.status, audio: 'done' }
       });
       setJobId(null);
+      queryClient.invalidateQueries({ queryKey: ['project', project?.project_id] });
     } else if (jobStatus?.status === 'failed' && scene) {
         updateScene(scene.scene_id, { ...scene, status: { ...scene.status, audio: 'failed' } });
         setJobId(null);
@@ -123,14 +120,16 @@ const AudioTab: React.FC = () => {
 
     updateScene(scene.scene_id, { ...scene, status: { ...scene.status, audio: 'generating' } });
 
+    const updatedScene = { ...scene, narrative_voiceover: { ...scene.narrative_voiceover, text_en: narasiLang === 'en' ? narasiText : scene.narrative_voiceover.text_en, text_id: narasiLang === 'id' ? narasiText : scene.narrative_voiceover.text_id }};
+
     generateAudio({ 
-        scene: { ...scene, narrative_voiceover: { ...scene.narrative_voiceover, text_en: narasiLang === 'en' ? narasiText : scene.narrative_voiceover.text_en, text_id: narasiLang === 'id' ? narasiText : scene.narrative_voiceover.text_id }},
+        scene: updatedScene,
         projectId: project.project_id,
-        audioConfig, 
+        audioConfig,
         awsRegion: settings.bedrock_audio_region 
     }, {
-        onSuccess: (data) => setJobId(data.jobId),
-        onError: (error) => {
+        onSuccess: (data: any) => setJobId(data.jobId), //TODO: Add type
+        onError: () => {
             if(scene) updateScene(scene.scene_id, { ...scene, status: { ...scene.status, audio: 'failed' } });
         }
     });
@@ -139,7 +138,7 @@ const AudioTab: React.FC = () => {
   if (!scene) return <div className="p-8 text-center text-text-muted">Please select a scene to manage audio.</div>;
   if (scene.status.video !== 'approved') return <div className="p-8 text-center text-text-muted">Please approve the video for this scene to unlock audio generation.</div>
 
-  const isLoading = isGenerating || jobStatus?.status === 'generating' || jobStatus?.status === 'pending';
+  const isLoading = isGenerating || scene.status.audio === 'generating' || scene.status.audio === 'pending';
   const isDone = scene.status.audio === 'done' || scene.status.audio === 'approved';
 
   return (
@@ -147,9 +146,9 @@ const AudioTab: React.FC = () => {
       <GlassCard variant="subtle" className="p-4">
         <div className="flex justify-between items-center mb-2">
             <h3 className="text-lg font-semibold text-cream">Narasi Voiceover</h3>
-            <GlassButton variant="ghost" size="sm" onClick={() => setNarasiLang(l => l === 'en' ? 'id' : 'en')} className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setNarasiLang(l => l === 'en' ? 'id' : 'en')} className="flex items-center gap-2">
                 <Languages size={16}/><span>{narasiLang.toUpperCase()}</span>
-            </GlassButton>
+            </Button>
         </div>
         <textarea value={narasiText} onChange={e => setNarasiText(e.target.value)} className="w-full h-28 p-2 rounded-lg bg-black/20 text-cream border border-glass-border-01 focus:border-accent-orange focus:ring-0 transition-colors"/>
       </GlassCard>
@@ -159,13 +158,13 @@ const AudioTab: React.FC = () => {
         
         <div>
             <label className="text-sm text-text-secondary mb-2 block">AI Model</label>
-            <SegmentedControl options={[{label: 'Polly', value: 'polly'}, {label: 'Gemini', value: 'gemini_tts'}, {label: 'ElevenLabs', value: 'elevenlabs'}]} value={audioModel} onChange={(val) => setAudioModel(val as AudioModel)} />
+            <SegmentedControl options={[{label: 'Polly', value: 'polly'}, {label: 'Gemini', value: 'gemini_tts'}, {label: 'ElevenLabs', value: 'elevenlabs'}]} value={audioModel} onChange={(val: string) => setAudioModel(val as AudioModel)} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
             <div>
                 <label className="text-sm text-text-secondary mb-2 block">Voice Gender</label>
-                <SegmentedControl options={[{label: 'Female', value: 'female'}, {label: 'Male', value: 'male'}]} value={voiceGender} onChange={(val) => setVoiceGender(val as VoiceGender)} />
+                <SegmentedControl options={[{label: 'Female', value: 'female'}, {label: 'Male', value: 'male'}]} value={voiceGender} onChange={(val: string) => setVoiceGender(val as VoiceGender)} />
             </div>
             <div>
                 <label className="text-sm text-text-secondary mb-2 block">Voice Character</label>
@@ -186,23 +185,35 @@ const AudioTab: React.FC = () => {
       </GlassCard>
       
       <div className="flex justify-center pt-2">
-        <GlassButton size="lg" onClick={handleGenerate} disabled={isLoading || !voiceCharacter} className="w-full max-w-sm">
+        <Button size="lg" onClick={handleGenerate} disabled={isLoading || !voiceCharacter} className="w-full max-w-sm">
             {isLoading ? <><Loader size={20} className="animate-spin mr-2"/> Generating Audio...</> : <><Waves size={20} className="mr-2"/> Generate Voiceover</>}
-        </GlassButton>
+        </Button>
       </div>
+
+      {jobError && (
+        <GlassCard variant="destructive" className="p-4">
+            <div className="flex items-center gap-3">
+                <AlertTriangle className="text-accent-orange" size={24}/>
+                <div>
+                    <h4 className="font-bold text-cream">Audio Generation Failed</h4>
+                    <p className="text-sm text-text-secondary">{(jobError as any).message || 'An unknown error occurred.'}</p>
+                </div>
+            </div>
+        </GlassCard>
+      )}
 
       {isDone && scene.assets.audio_url && (
         <GlassCard variant="strong" className="p-4 space-y-4 mt-6">
             <h3 className="text-lg font-semibold text-cream">Final Audio</h3>
             <WaveformPlayer src={scene.assets.audio_url} />
             <div className="grid grid-cols-2 gap-3 pt-2">
-                <GlassButton variant="secondary" onClick={() => window.open(scene.assets.audio_url, '_blank')}><Download size={16} className="mr-2"/> Download</GlassButton>
-                <GlassButton variant="secondary" onClick={() => navigator.clipboard.writeText(narasiText)}><Copy size={16} className="mr-2"/> Copy Text</GlassButton>
+                <Button variant="secondary" onClick={() => window.open(scene.assets.audio_url, '_blank')}><Download size={16} className="mr-2"/> Download</Button>
+                <Button variant="secondary" onClick={() => navigator.clipboard.writeText(narasiText)}><Copy size={16} className="mr-2"/> Copy Text</Button>
             </div>
             <div className="pt-2">
-                <GlassButton variant="primary" onClick={() => updateScene(scene.scene_id, { ...scene, status: { ...scene.status, audio: 'approved' }})} className="w-full" disabled={scene.status.audio === 'approved'}>
+                <Button variant="default" onClick={() => updateScene(scene.scene_id, { ...scene, status: { ...scene.status, audio: 'approved' }})} className="w-full" disabled={scene.status.audio === 'approved'}>
                     <CheckCircle size={20} className="mr-2"/> {scene.status.audio === 'approved' ? 'Audio Approved' : 'Approve Audio'}
-                </GlassButton>
+                </Button>
             </div>
         </GlassCard>
       )}

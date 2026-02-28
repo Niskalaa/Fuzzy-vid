@@ -1,7 +1,7 @@
 import React from 'react';
-import { Scene } from '../../../types/schema';
-import useProjectStore from '../../../store/projectStore';
-import { GlassCard } from '../../glass/GlassCard';
+import { Scene } from '../../types/schema';
+import useProjectStore from '../../store/projectStore';
+import { GlassCard } from '../glass/GlassCard';
 import { ImageTab } from './tabs/ImageTab';
 import { VideoTab } from './tabs/VideoTab';
 
@@ -11,7 +11,7 @@ interface SceneCardProps {
 
 const SceneCard: React.FC<SceneCardProps> = ({ scene }) => {
   const { project } = useProjectStore();
-  const currentScene = project?.scenes.find(s => s.scene_id === scene.scene_id);
+  const currentScene = project?.scenes.find((s: Scene) => s.scene_id === scene.scene_id);
   const [activeTab, setActiveTab] = React.useState('image');
 
   return (
